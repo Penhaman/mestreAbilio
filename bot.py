@@ -59,7 +59,7 @@ def analisar_sinal(df, symbol, interval):
     # Indicadores técnicos (EMA, RSI, Volume)
     df['EMA9'] = df['close'].ewm(span=9, adjust=False).mean()
     df['EMA21'] = df['close'].ewm(span=21, adjust=False).mean()
-    df['RSI'] = ta.RSI(df['close'], timeperiod=14)
+    df['RSI'] = ta.momentum.rsi(df['close'], window=14)
     df['Volume'] = df['volume']
     
     sinal = ''
