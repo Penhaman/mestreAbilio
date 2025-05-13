@@ -11,6 +11,7 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')  # Token do bot armazenado no Railway
 GRUPO_CHAT_ID = os.getenv('GRUPO_CHAT_ID')  # ID do grupo armazenado no Railway
 
 
+
 # Verifica se as variáveis de ambiente foram configuradas corretamente
 if not BOT_TOKEN or not GRUPO_CHAT_ID:
     print("Erro: As variáveis de ambiente BOT_TOKEN ou GRUPO_CHAT_ID não estão configuradas!")
