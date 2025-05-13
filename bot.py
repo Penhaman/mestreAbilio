@@ -1,7 +1,7 @@
 import telebot
 import requests
 import pandas as pd
-import talib
+import ta
 import schedule
 import time
 import os  # Para acessar variáveis de ambiente
