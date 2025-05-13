@@ -75,14 +75,38 @@ def get_klines(symbol, interval, limit=100):
     return df
 
 # Função para análise do sinal
-def analisar_sinal(df, symbol, interval):
-    # Indicadores técnicos (EMA, RSI, Volume) usando a biblioteca 'ta'
-    df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
-    df['EMA21'] = ta.trend.ema_indicator(df['close'], window=21)
-    df['RSI'] = ta.momentum.rsi(df['close'], window=14)  # Cálculo correto do RSI
-    df['Volume'] = df['volume']
+def verificar_padrao_candle(df):
+    sinal = ""
+
+    # Martelo Invertido
+    if df['close'].iloc[-1] < df['open'].iloc[-1] and (df['high'].iloc[-1] - df['close'].iloc[-1]) > 2 * (df['close'].iloc[-1] - df['open'].iloc[-1]):
+        sinal += "Inverted hammer candlestick detected ⚠️\n"
     
-    sinal = ''
+    # Martelo
+    if df['close'].iloc[-1] > df['open'].iloc[-1] and (df['close'].iloc[-1] - df['low'].iloc[-1]) > 2 * (df['open'].iloc[-1] - df['close'].iloc[-1]):
+        sinal += "Hammer candlestick detected 🛑\n"
+    
+    # Doji
+    if abs(df['close'].iloc[-1] - df['open'].iloc[-1]) <= 0.1 * (df['high'].iloc[-1] - df['low'].iloc[-1]):
+        sinal += "Doji candlestick detected 🔲\n"
+    
+    # Engolfo de Alta
+    if df['close'].iloc[-1] > df['open'].iloc[-1] and df['close'].iloc[-2] < df['open'].iloc[-2] and df['close'].iloc[-1] > df['open'].iloc[-2] and df['open'].iloc[-1] < df['close'].iloc[-2]:
+        sinal += "Bullish Engulfing candlestick detected 🟢\n"
+    
+    # Engolfo de Baixa
+    if df['close'].iloc[-1] < df['open'].iloc[-1] and df['close'].iloc[-2] > df['open'].iloc[-2] and df['close'].iloc[-1] < df['open'].iloc[-2] and df['open'].iloc[-1] > df['close'].iloc[-2]:
+        sinal += "Bearish Engulfing candlestick detected 🔴\n"
+    
+    # Estrela da Manhã
+    if df['close'].iloc[-1] > df['open'].iloc[-1] and df['close'].iloc[-2] < df['open'].iloc[-2] and df['close'].iloc[-3] < df['open'].iloc[-3]:
+        sinal += "Morning Star candlestick detected 🌅\n"
+    
+    # Estrela da Noite
+    if df['close'].iloc[-1] < df['open'].iloc[-1] and df['close'].iloc[-2] > df['open'].iloc[-2] and df['close'].iloc[-3] > df['open'].iloc[-3]:
+        sinal += "Evening Star candlestick detected 🌙\n"
+
+    return sinal
     
     # Verifica cruzamento da EMA9 e EMA21
     if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1]:
