@@ -75,6 +75,42 @@ def get_klines(symbol, interval, limit=100):
     return df
 
 # Função para análise do sinal
+def analisar_sinal(df, symbol, interval):
+    # Indicadores técnicos (EMA, RSI, Volume) usando a biblioteca 'ta'
+    df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
+    df['EMA21'] = ta.trend.ema_indicator(df['close'], window=21)
+    df['RSI'] = ta.momentum.rsi(df['close'], window=14)  # Cálculo correto do RSI
+    df['Volume'] = df['volume']
+    
+    sinal = ''
+    
+    # Verifica cruzamento da EMA9 e EMA21
+    if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1]:
+        sinal += f"Long signal detected for {symbol} on {interval} 📈\n"
+    else:
+        sinal += f"Short signal detected for {symbol} on {interval} 📉\n"
+    
+    # Verifica RSI (Exemplo: comprar se RSI < 30, vender se RSI > 70)
+    if df['RSI'].iloc[-1] < 30:
+        sinal += "RSI indicates oversold condition (Potential Buy) 🟢\n"
+    elif df['RSI'].iloc[-1] > 70:
+        sinal += "RSI indicates overbought condition (Potential Sell) 🔴\n"
+    
+    # Verifica volume
+    if df['Volume'].iloc[-1] > df['Volume'].mean():
+        sinal += "High volume detected 📊\n"
+    
+    # Padrões de candlestick
+    if verificar_padrao_candle(df):
+        sinal += verificar_padrao_candle(df)  # Adiciona o padrão identificado à mensagem
+
+    # Se houver sinal, retorne
+    if sinal:
+        return sinal
+    else:
+        return None
+
+# Função para verificar padrões de candlestick
 def verificar_padrao_candle(df):
     sinal = ""
 
@@ -107,32 +143,6 @@ def verificar_padrao_candle(df):
         sinal += "Evening Star candlestick detected 🌙\n"
 
     return sinal
-    
-    # Verifica cruzamento da EMA9 e EMA21
-    if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1]:
-        sinal += f"Long signal detected for {symbol} on {interval} 📈\n"
-    else:
-        sinal += f"Short signal detected for {symbol} on {interval} 📉\n"
-    
-    # Verifica RSI (Exemplo: comprar se RSI < 30, vender se RSI > 70)
-    if df['RSI'].iloc[-1] < 30:
-        sinal += "RSI indica sobrevenda (Potencial compra!) 🟢\n"
-    elif df['RSI'].iloc[-1] > 70:
-        sinal += "RSI indica sobrecompra (Potencial venda!) 🔴\n"
-    
-    # Verifica volume
-    if df['Volume'].iloc[-1] > df['Volume'].mean():
-        sinal += "Volume alto detetado 📊\n"
-    
-    # Verifica padrões de candle, por exemplo, martelo invertido
-    if df['close'].iloc[-1] < df['open'].iloc[-1] and (df['high'].iloc[-1] - df['close'].iloc[-1]) > 2 * (df['close'].iloc[-1] - df['open'].iloc[-1]):
-        sinal += "Martelo invertido detetado ⚠️\n"
-    
-    # Se houver sinal, retorne
-    if sinal:
-        return sinal
-    else:
-        return None
 
 # Função para enviar sinal agendado
 def tarefa_agendada():
@@ -164,23 +174,17 @@ def siga(message):
             bot.reply_to(message, f"Sem sinal para {symbol} ({interval}).")
     
     except Exception as e:
-        bot.reply_to(message, f"Erro ao processar o comando: {e}")
+        bot.reply_to(message, f"Erro ao processar o comando: {str(e)}")
 
-# Comando /sinais para listar sinais armazenados (exemplo, apenas envia uma resposta fictícia)
-@bot.message_handler(commands=['sinais'])
-def sinais(message):
-    bot.reply_to(message, "Exemplo de sinais armazenados:\nBTCUSDT 1d: Long signal 📈\nETHUSDT 1w: Short signal 📉")
-
-# Agendamento de tarefas automáticas
-schedule.every().day.at("09:00").do(tarefa_agendada)
-
-# Função para rodar o bot e agendamento
-def run():
+# Iniciar o bot
+if __name__ == '__main__':
+    # Agendar o envio automático de sinais
+    schedule.every(30).minutes.do(tarefa_agendada)
+    
+    # Iniciar o bot e agendar as tarefas
     while True:
-        schedule.run_pending()
-        time.sleep(1)
-        bot.polling(none_stop=True, interval=0)
-
-if __name__ == "__main__":
-    run()
-
+        try:
+            schedule.run_pending()
+            time.sleep(1)
+        except Exception as e:
+            print(f"Erro na execução: {e}")
