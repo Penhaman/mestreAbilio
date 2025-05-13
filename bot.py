@@ -197,6 +197,15 @@ def siga(message):
         bot.reply_to(message, f"Erro ao processar o comando: {str(e)}")
         print(f"Erro ao processar o comando: {str(e)}")
 
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    print("Comando /start recebido!")  # Adiciona o log para garantir que o comando chegou
+    bot.reply_to(message, "Bot está funcionando!")
+
+# Verifique o fluxo de polling
+print("Bot está rodando...")
+bot.polling(none_stop=True)
+
 # Iniciar o bot
 if __name__ == '__main__':
     # Agendar o envio automático de sinais
