@@ -10,6 +10,7 @@ import os  # Para acessar variáveis de ambiente
 BOT_TOKEN = os.getenv('BOT_TOKEN')  # Token do bot armazenado no Railway
 GRUPO_CHAT_ID = os.getenv('GRUPO_CHAT_ID')  # ID do grupo armazenado no Railway
 
+
 # Verifica se as variáveis de ambiente foram configuradas corretamente
 if not BOT_TOKEN or not GRUPO_CHAT_ID:
     print("Erro: As variáveis de ambiente BOT_TOKEN ou GRUPO_CHAT_ID não estão configuradas!")
@@ -39,6 +40,20 @@ def obter_top_200_coingecko():
     
     return pares
 
+# Função para garantir que as colunas numéricas sejam convertidas corretamente
+def limpar_dados(df):
+    # Verifica se há valores não numéricos e os converte para NaN
+    df['close'] = pd.to_numeric(df['close'], errors='coerce')  # 'coerce' transforma valores inválidos em NaN
+    df['open'] = pd.to_numeric(df['open'], errors='coerce')
+    df['high'] = pd.to_numeric(df['high'], errors='coerce')
+    df['low'] = pd.to_numeric(df['low'], errors='coerce')
+    df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
+
+    # Substitui os NaN por 0
+    df = df.fillna(0)
+
+    return df
+
 # Função para obter os dados históricos do par
 def get_klines(symbol, interval, limit=100):
     url = f'https://api.binance.com/api/v1/klines'
@@ -49,17 +64,22 @@ def get_klines(symbol, interval, limit=100):
     }
     response = requests.get(url, params=params)
     data = response.json()
+    
+    # Converte para DataFrame
     df = pd.DataFrame(data, columns=['time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
     df['time'] = pd.to_datetime(df['time'], unit='ms')
-    df['close'] = pd.to_numeric(df['close'])
+    
+    # Limpa e converte os dados
+    df = limpar_dados(df)
+
     return df
 
 # Função para análise do sinal
 def analisar_sinal(df, symbol, interval):
-    # Indicadores técnicos (EMA, RSI, Volume)
-    df['EMA9'] = df['close'].ewm(span=9, adjust=False).mean()
-    df['EMA21'] = df['close'].ewm(span=21, adjust=False).mean()
-    df['RSI'] = ta.momentum.rsi(df['close'], window=14)
+    # Indicadores técnicos (EMA, RSI, Volume) usando a biblioteca 'ta'
+    df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
+    df['EMA21'] = ta.trend.ema_indicator(df['close'], window=21)
+    df['RSI'] = ta.momentum.rsi(df['close'], window=14)  # Cálculo correto do RSI
     df['Volume'] = df['volume']
     
     sinal = ''
@@ -139,3 +159,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+
