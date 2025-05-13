@@ -4,10 +4,16 @@ import pandas as pd
 import talib
 import schedule
 import time
+import os  # Para acessar variáveis de ambiente
 
-# Definir o token do bot (substitui pelo teu token)
-BOT_TOKEN = 'YOUR_BOT_TOKEN'
-GRUPO_CHAT_ID = -1001234567890  # Substitua pelo seu chat ID do grupo
+# Acessar as variáveis de ambiente do Railway
+BOT_TOKEN = os.getenv('BOT_TOKEN')  # Token do bot armazenado no Railway
+GRUPO_CHAT_ID = os.getenv('GRUPO_CHAT_ID')  # ID do grupo armazenado no Railway
+
+# Verifica se as variáveis de ambiente foram configuradas corretamente
+if not BOT_TOKEN or not GRUPO_CHAT_ID:
+    print("Erro: As variáveis de ambiente BOT_TOKEN ou GRUPO_CHAT_ID não estão configuradas!")
+    exit(1)
 
 # Criar o bot
 bot = telebot.TeleBot(BOT_TOKEN)
