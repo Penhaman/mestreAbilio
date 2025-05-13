@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 # Variáveis de ambiente
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
+GRUPO_CHAT_ID = os.getenv("GRUPO_CHAT_ID")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -135,11 +135,6 @@ def siga_handler(message):
 @bot.message_handler(commands=['sinais'])
 def sinais_handler(message):
     bot.reply_to(message, "🔔 Sinais ativos: use /siga para buscar sinais sob pedido.")
-
-@bot.message_handler(func=lambda m: True)
-def debug_chat_id(message):
-    bot.reply_to(message, f"Chat ID: {message.chat.id}")
-
 
 
 # Inicialização
