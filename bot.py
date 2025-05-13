@@ -97,19 +97,19 @@ def analisar_sinal(df, symbol, interval):
     
     # Verifica cruzamento da EMA9 e EMA21
     if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1]:
-        sinal += f"Long signal detected for {symbol} on {interval} 📈\n"
+        sinal += f"Sinal Long detetado para {symbol} em {interval} 📈\n"
     else:
-        sinal += f"Short signal detected for {symbol} on {interval} 📉\n"
+        sinal += f"Sinal Short detetado para {symbol} em {interval} 📉\n"
     
     # Verifica RSI (Exemplo: comprar se RSI < 30, vender se RSI > 70)
     if df['RSI'].iloc[-1] < 30:
-        sinal += "RSI indicates oversold condition (Potential Buy) 🟢\n"
+        sinal += "RSI indica sobrevenda (Potencial Compra) 🟢\n"
     elif df['RSI'].iloc[-1] > 70:
-        sinal += "RSI indicates overbought condition (Potential Sell) 🔴\n"
+        sinal += "RSI indica sobrecompra (Potencial Venda) 🔴\n"
     
     # Verifica volume
     if df['Volume'].iloc[-1] > df['Volume'].mean():
-        sinal += "High volume detected 📊\n"
+        sinal += "Alto volume detetado 📊\n"
     
     # Padrões de candlestick
     if verificar_padrao_candle(df):
@@ -127,31 +127,31 @@ def verificar_padrao_candle(df):
 
     # Martelo Invertido
     if df['close'].iloc[-1] < df['open'].iloc[-1] and (df['high'].iloc[-1] - df['close'].iloc[-1]) > 2 * (df['close'].iloc[-1] - df['open'].iloc[-1]):
-        sinal += "Inverted hammer candlestick detected ⚠️\n"
+        sinal += "Martelo invertido detetado ⚠️\n"
     
     # Martelo
     if df['close'].iloc[-1] > df['open'].iloc[-1] and (df['close'].iloc[-1] - df['low'].iloc[-1]) > 2 * (df['open'].iloc[-1] - df['close'].iloc[-1]):
-        sinal += "Hammer candlestick detected 🛑\n"
+        sinal += "Martelo detetado 🛑\n"
     
     # Doji
     if abs(df['close'].iloc[-1] - df['open'].iloc[-1]) <= 0.1 * (df['high'].iloc[-1] - df['low'].iloc[-1]):
-        sinal += "Doji candlestick detected 🔲\n"
+        sinal += "Doji detetado 🔲\n"
     
     # Engolfo de Alta
     if df['close'].iloc[-1] > df['open'].iloc[-1] and df['close'].iloc[-2] < df['open'].iloc[-2] and df['close'].iloc[-1] > df['open'].iloc[-2] and df['open'].iloc[-1] < df['close'].iloc[-2]:
-        sinal += "Bullish Engulfing candlestick detected 🟢\n"
+        sinal += "Engolfo de Alta detetado 🟢\n"
     
     # Engolfo de Baixa
     if df['close'].iloc[-1] < df['open'].iloc[-1] and df['close'].iloc[-2] > df['open'].iloc[-2] and df['close'].iloc[-1] < df['open'].iloc[-2] and df['open'].iloc[-1] > df['close'].iloc[-2]:
-        sinal += "Bearish Engulfing candlestick detected 🔴\n"
+        sinal += "Engolfo de baixa detetado 🔴\n"
     
     # Estrela da Manhã
     if df['close'].iloc[-1] > df['open'].iloc[-1] and df['close'].iloc[-2] < df['open'].iloc[-2] and df['close'].iloc[-3] < df['open'].iloc[-3]:
-        sinal += "Morning Star candlestick detected 🌅\n"
+        sinal += "Morning Star detetada 🌅\n"
     
     # Estrela da Noite
     if df['close'].iloc[-1] < df['open'].iloc[-1] and df['close'].iloc[-2] > df['open'].iloc[-2] and df['close'].iloc[-3] > df['open'].iloc[-3]:
-        sinal += "Evening Star candlestick detected 🌙\n"
+        sinal += "Evening Star detetada 🌙\n"
 
     return sinal
 
