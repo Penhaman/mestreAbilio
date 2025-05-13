@@ -1,183 +1,142 @@
-import ccxt
-import pandas as pd
-import requests
-import time
 import os
+import time
+import requests
+import telebot
+import pandas as pd
+from datetime import datetime, timedelta
 
-# === CONFIGURAÇÕES ===
-CMC_API_KEY = os.getenv('CMC_API_KEY')
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
-DEFAULT_TIMEFRAME = '1d'
-ALLOWED_TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d', '1w']
-EMA_SHORT = 9
-EMA_LONG = 21
-RSI_PERIOD = 14
-VOLUME_PERIOD = 14
-EXCHANGE = ccxt.binance({'enableRateLimit': True})
+# Variáveis de ambiente
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
 
-# Guardar sinais detectados
-last_signals = []
+bot = telebot.TeleBot(BOT_TOKEN)
 
-# === Pegar Top 200 moedas ===
-def get_top_200_symbols():
-    url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest'
-    parameters = {'start': '1', 'limit': '200', 'convert': 'USD'}
-    headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': CMC_API_KEY}
-    response = requests.get(url, headers=headers, params=parameters)
-    data = response.json()
-    symbols = [coin['symbol'] for coin in data['data']]
-    return symbols
-
-# === Buscar candles da Binance ===
-def fetch_ohlcv(symbol, timeframe=DEFAULT_TIMEFRAME):
-    pair = symbol + '/USDT'
+# Utilitário: Obter dados da Binance
+def get_klines(symbol, interval, limit=100):
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
     try:
-        ohlcv = EXCHANGE.fetch_ohlcv(pair, timeframe=timeframe)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'close', 'volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        response = requests.get(url)
+        data = response.json()
+        df = pd.DataFrame(data, columns=[
+            'open_time', 'open', 'high', 'low', 'close', 'volume',
+            'close_time', 'quote_asset_volume', 'number_of_trades',
+            'taker_buy_base_volume', 'taker_buy_quote_volume', 'ignore'])
+
+        df['open'] = df['open'].astype(float)
+        df['high'] = df['high'].astype(float)
+        df['low'] = df['low'].astype(float)
+        df['close'] = df['close'].astype(float)
+        df['volume'] = df['volume'].astype(float)
+
         return df
     except Exception as e:
-        print(f"Erro ao buscar {pair} ({timeframe}): {e}")
+        print(f"Erro ao obter dados de {symbol}: {e}")
         return None
 
-# === Calcular RSI ===
-def calculate_rsi(df, period=14):
+# Indicadores
+
+def calcular_ema(df, periodo):
+    return df['close'].ewm(span=periodo).mean()
+
+def calcular_rsi(df, period=14):
     delta = df['close'].diff()
-    gain = delta.clip(lower=0)
-    loss = -1 * delta.clip(upper=0)
-    avg_gain = gain.ewm(span=period, min_periods=period).mean()
-    avg_loss = loss.ewm(span=period, min_periods=period).mean()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
     rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    df['RSI'] = rsi
+    return 100 - (100 / (1 + rs))
 
-# === Gerar sinal ===
-def generate_signal(df):
-    df['EMA_short'] = df['close'].ewm(span=EMA_SHORT).mean()
-    df['EMA_long'] = df['close'].ewm(span=EMA_LONG).mean()
-    calculate_rsi(df, RSI_PERIOD)
-    df['Volume_MA'] = df['volume'].rolling(window=VOLUME_PERIOD).mean()
+def candle_type(candle):
+    body = abs(candle['close'] - candle['open'])
+    shadow = candle['high'] - candle['low']
+    if candle['close'] > candle['open'] and body > shadow * 0.6:
+        return "Bullish"
+    elif candle['open'] > candle['close'] and body > shadow * 0.6:
+        return "Bearish"
+    elif candle['high'] - max(candle['open'], candle['close']) > 2 * body:
+        return "Martelo Invertido"
+    return "Indeciso"
 
-    last = df.iloc[-1]
-    prev = df.iloc[-2]
+def verificar_golden_cross(ema_short, ema_long):
+    return ema_short.iloc[-1] > ema_long.iloc[-1] and ema_short.iloc[-2] <= ema_long.iloc[-2]
 
-    long_conditions = (
-        prev['EMA_short'] <= prev['EMA_long'] and last['EMA_short'] > last['EMA_long'] and
-        last['RSI'] > 50 and
-        last['volume'] > last['Volume_MA'] and
-        last['close'] > last['open']
-    )
+def verificar_death_cross(ema_short, ema_long):
+    return ema_short.iloc[-1] < ema_long.iloc[-1] and ema_short.iloc[-2] >= ema_long.iloc[-2]
 
-    short_conditions = (
-        prev['EMA_short'] >= prev['EMA_long'] and last['EMA_short'] < last['EMA_long'] and
-        last['RSI'] < 50 and
-        last['volume'] > last['Volume_MA'] and
-        last['close'] < last['open']
-    )
+def verificar_oco(df):
+    if len(df) < 5:
+        return False
+    hs = df.iloc[-5:]
+    return hs['high'].iloc[1] > hs['high'].iloc[0] and hs['high'].iloc[1] > hs['high'].iloc[2] and hs['high'].iloc[3] < hs['high'].iloc[1]
 
-    if long_conditions:
-        return 'LONG'
-    elif short_conditions:
-        return 'SHORT'
-    else:
+def verificar_ocoi(df):
+    if len(df) < 5:
+        return False
+    ls = df.iloc[-5:]
+    return ls['low'].iloc[1] < ls['low'].iloc[0] and ls['low'].iloc[1] < ls['low'].iloc[2] and ls['low'].iloc[3] > ls['low'].iloc[1]
+
+def verificar_black_swan(df):
+    última = df.iloc[-1]
+    return (última['high'] - última['low']) > 2 * abs(última['close'] - última['open'])
+
+def analisar_sinal(df, symbol, interval):
+    if df is None or df.empty:
         return None
 
-# === Enviar mensagem para Telegram ===
-def send_telegram(message, chat_id=None):
-    if chat_id is None:
-        chat_id = TELEGRAM_CHAT_ID
-    url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage'
-    payload = {'chat_id': chat_id, 'text': message}
-    requests.post(url, data=payload)
+    ema9 = calcular_ema(df, 9)
+    ema21 = calcular_ema(df, 21)
+    rsi = calcular_rsi(df)
+    vol = df['volume']
+    candle = {
+        'open': df['open'].iloc[-1],
+        'close': df['close'].iloc[-1],
+        'high': df['high'].iloc[-1],
+        'low': df['low'].iloc[-1]
+    }
+    tipo = candle_type(candle)
+    sentimento = "Positivo" if rsi.iloc[-1] > 50 else "Negativo"
 
-# === Responder comando /siga ===
-def handle_siga_command(command, chat_id):
-    parts = command.split()
-    if len(parts) < 2:
-        send_telegram("Uso correto: /siga BTC 4h (ou /siga BTC)", chat_id)
-        return
-    
-    symbol = parts[1].upper()
-    timeframe = parts[2] if len(parts) > 2 else DEFAULT_TIMEFRAME
+    sinais = []
 
-    if timeframe not in ALLOWED_TIMEFRAMES:
-        allowed = ", ".join(ALLOWED_TIMEFRAMES)
-        send_telegram(f"⛔ Timeframe inválido. Use: {allowed}", chat_id)
-        return
+    if verificar_golden_cross(ema9, ema21):
+        sinais.append("🔶 Golden Cross")
+    if verificar_death_cross(ema9, ema21):
+        sinais.append("🔻 Death Cross")
+    if verificar_oco(df):
+        sinais.append("🛑 OCO Detectado")
+    if verificar_ocoi(df):
+        sinais.append("🔁 OCOI Detectado")
+    if verificar_black_swan(df):
+        sinais.append("⚠️ Black Swan")
 
-    df = fetch_ohlcv(symbol, timeframe)
-    if df is None or len(df) < EMA_LONG + RSI_PERIOD:
-        send_telegram(f"Não consegui buscar dados para {symbol}/USDT no timeframe {timeframe}.", chat_id)
-        return
-    
-    signal = generate_signal(df)
-    if signal:
-        message = f"SINAL {signal} para {symbol}/USDT no gráfico {timeframe} 🚀"
-    else:
-        message = f"Sem sinal atual para {symbol}/USDT no gráfico {timeframe}."
-    
-    send_telegram(message, chat_id)
+    if not sinais:
+        return None
 
-# === Responder comando /sinais ===
-def handle_sinais_command(chat_id):
-    if not last_signals:
-        send_telegram("Nenhum sinal encontrado na última análise.", chat_id)
-    else:
-        signals_text = "Últimos sinais detectados:\n\n" + "\n".join(last_signals)
-        send_telegram(signals_text, chat_id)
+    mensagem = f"\n📊 Sinal Detectado para {symbol} ({interval})\n"
+    mensagem += f"RSI: {rsi.iloc[-1]:.2f}\nTipo de Candle: {tipo}\nSentimento: {sentimento}\n"
+    mensagem += "\n".join(sinais)
+    return mensagem
 
-# === Monitorar comandos do Telegram ===
-def check_telegram_updates(last_update_id=None):
-    url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates'
-    if last_update_id:
-        url += f'?offset={last_update_id + 1}'
-    response = requests.get(url)
-    data = response.json()
-    return data.get('result', [])
+# Comando /siga
+@bot.message_handler(commands=['siga'])
+def siga_handler(message):
+    bot.reply_to(message, "🔍 A procurar sinais... Aguarde.")
+    symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT"]  # Exemplos, pode ser top 200
+    intervals = ["1d", "1w"]
+    for symbol in symbols:
+        for interval in intervals:
+            df = get_klines(symbol, interval, 100)
+            sinal = analisar_sinal(df, symbol, interval)
+            if sinal:
+                bot.send_message(message.chat.id, sinal)
 
-# === Função principal ===
-def main():
-    global last_signals
-    last_update_id = None
+# Comando /sinais
+@bot.message_handler(commands=['sinais'])
+def sinais_handler(message):
+    bot.reply_to(message, "🔔 Sinais ativos: use /siga para buscar sinais sob pedido.")
 
-    while True:
-        try:
-            print("Buscando novas mensagens...")
-            updates = check_telegram_updates(last_update_id)
-            for update in updates:
-                if 'message' in update:
-                    message_text = update['message'].get('text', '')
-                    chat_id = update['message']['chat']['id']
-                    last_update_id = update['update_id']
-
-                    if message_text.startswith('/siga'):
-                        handle_siga_command(message_text, chat_id)
-                    elif message_text.startswith('/sinais'):
-                        handle_sinais_command(chat_id)
-
-            print("Analisando sinais automáticos...")
-            last_signals = []  # Limpa lista
-            symbols = get_top_200_symbols()
-
-            for symbol in symbols:
-                df = fetch_ohlcv(symbol, DEFAULT_TIMEFRAME)
-                if df is not None and len(df) > EMA_LONG + RSI_PERIOD:
-                    signal = generate_signal(df)
-                    if signal:
-                        sig_msg = f"{signal} - {symbol}/USDT [{DEFAULT_TIMEFRAME}]"
-                        print(sig_msg)
-                        send_telegram(sig_msg)
-                        last_signals.append(sig_msg)
-                else:
-                    print(f"Dados insuficientes para {symbol}/USDT.")
-
-            print("Aguardando 24h para nova varredura automática...")
-            time.sleep(60 * 60 * 24)
-
-        except Exception as e:
-            print(f"Erro geral: {e}")
-            time.sleep(60)
-
+# Inicialização
 if __name__ == "__main__":
-    main()
+    print("🤖 Bot está ativo...")
+    bot.infinity_polling()
