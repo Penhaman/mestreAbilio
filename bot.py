@@ -136,6 +136,12 @@ def siga_handler(message):
 def sinais_handler(message):
     bot.reply_to(message, "🔔 Sinais ativos: use /siga para buscar sinais sob pedido.")
 
+@bot.message_handler(func=lambda m: True)
+def debug_chat_id(message):
+    bot.reply_to(message, f"Chat ID: {message.chat.id}")
+
+
+
 # Inicialização
 if __name__ == "__main__":
     print("🤖 Bot está ativo...")
