@@ -10,8 +10,6 @@ import os  # Para acessar variáveis de ambiente
 BOT_TOKEN = os.getenv('BOT_TOKEN')  # Token do bot armazenado no Railway
 GRUPO_CHAT_ID = os.getenv('GRUPO_CHAT_ID')  # ID do grupo armazenado no Railway
 
-
-
 # Verifica se as variáveis de ambiente foram configuradas corretamente
 if not BOT_TOKEN or not GRUPO_CHAT_ID:
     print("Erro: As variáveis de ambiente BOT_TOKEN ou GRUPO_CHAT_ID não estão configuradas!")
@@ -22,6 +20,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 # Função para obter o Top 200 criptomoedas do CoinGecko
 def obter_top_200_coingecko():
+    print("🔄 Obtendo o top 200 de criptomoedas do CoinGecko...")
     url = 'https://api.coingecko.com/api/v3/coins/markets'
     params = {
         'vs_currency': 'usd',  # Os preços vão ser em USD
@@ -34,16 +33,21 @@ def obter_top_200_coingecko():
     response = requests.get(url, params=params)
     data = response.json()
     
+    if 'error' in data:
+        print(f"Erro ao obter dados do CoinGecko: {data['error']}")
+        return []
+
     pares = []
     for crypto in data:
         symbol = crypto['symbol'].upper()  # Simbolos em maiúsculo
         pares.append(f"{symbol}USDT")  # Adiciona o par com USDT (pode ser ajustado para outros pares)
     
+    print(f"Obtidos {len(pares)} pares de moedas.")
     return pares
 
 # Função para garantir que as colunas numéricas sejam convertidas corretamente
 def limpar_dados(df):
-    # Verifica se há valores não numéricos e os converte para NaN
+    print("🔄 Limpando dados...")
     df['close'] = pd.to_numeric(df['close'], errors='coerce')  # 'coerce' transforma valores inválidos em NaN
     df['open'] = pd.to_numeric(df['open'], errors='coerce')
     df['high'] = pd.to_numeric(df['high'], errors='coerce')
@@ -57,6 +61,7 @@ def limpar_dados(df):
 
 # Função para obter os dados históricos do par
 def get_klines(symbol, interval, limit=100):
+    print(f"🔄 Obtendo dados históricos para {symbol} no intervalo {interval}...")
     url = f'https://api.binance.com/api/v1/klines'
     params = {
         'symbol': symbol,
@@ -65,6 +70,10 @@ def get_klines(symbol, interval, limit=100):
     }
     response = requests.get(url, params=params)
     data = response.json()
+    
+    if not data:
+        print(f"Erro ao obter dados históricos para {symbol} no intervalo {interval}.")
+        return pd.DataFrame()  # Retorna um DataFrame vazio em caso de erro
     
     # Converte para DataFrame
     df = pd.DataFrame(data, columns=['time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
@@ -77,6 +86,7 @@ def get_klines(symbol, interval, limit=100):
 
 # Função para análise do sinal
 def analisar_sinal(df, symbol, interval):
+    print(f"🔄 Analisando sinal para {symbol} no intervalo {interval}...")
     # Indicadores técnicos (EMA, RSI, Volume) usando a biblioteca 'ta'
     df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
     df['EMA21'] = ta.trend.ema_indicator(df['close'], window=21)
@@ -149,10 +159,15 @@ def verificar_padrao_candle(df):
 def tarefa_agendada():
     print("⏰ Execução automática de sinais...")
     symbols = obter_top_200_coingecko()  # Obtém os 200 pares mais populares
+    if not symbols:
+        print("Nenhum par encontrado para enviar sinais.")
+        return
     intervals = ["1d", "1w"]
     for symbol in symbols:
         for interval in intervals:
             df = get_klines(symbol, interval, 100)
+            if df.empty:
+                continue
             sinal = analisar_sinal(df, symbol, interval)
             if sinal:
                 bot.send_message(GRUPO_CHAT_ID, f"[AGENDADO]\n{sinal}")
@@ -168,6 +183,10 @@ def siga(message):
         
         symbol, interval = params
         df = get_klines(symbol, interval, 100)
+        if df.empty:
+            bot.reply_to(message, f"Erro: Não foi possível obter dados para {symbol}.")
+            return
+        
         sinal = analisar_sinal(df, symbol, interval)
         if sinal:
             bot.reply_to(message, f"Sinal para {symbol} ({interval}):\n{sinal}")
@@ -176,6 +195,7 @@ def siga(message):
     
     except Exception as e:
         bot.reply_to(message, f"Erro ao processar o comando: {str(e)}")
+        print(f"Erro ao processar o comando: {str(e)}")
 
 # Iniciar o bot
 if __name__ == '__main__':
