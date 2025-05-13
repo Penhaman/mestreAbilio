@@ -92,17 +92,17 @@ def analisar_sinal(df, symbol, interval):
     
     # Verifica RSI (Exemplo: comprar se RSI < 30, vender se RSI > 70)
     if df['RSI'].iloc[-1] < 30:
-        sinal += "RSI indicates oversold condition (Potential Buy) 🟢\n"
+        sinal += "RSI indica sobrevenda (Potencial compra!) 🟢\n"
     elif df['RSI'].iloc[-1] > 70:
-        sinal += "RSI indicates overbought condition (Potential Sell) 🔴\n"
+        sinal += "RSI indica sobrecompra (Potencial venda!) 🔴\n"
     
     # Verifica volume
     if df['Volume'].iloc[-1] > df['Volume'].mean():
-        sinal += "High volume detected 📊\n"
+        sinal += "Volume alto detetado 📊\n"
     
     # Verifica padrões de candle, por exemplo, martelo invertido
     if df['close'].iloc[-1] < df['open'].iloc[-1] and (df['high'].iloc[-1] - df['close'].iloc[-1]) > 2 * (df['close'].iloc[-1] - df['open'].iloc[-1]):
-        sinal += "Inverted hammer candlestick detected ⚠️\n"
+        sinal += "Martelo invertido detetado ⚠️\n"
     
     # Se houver sinal, retorne
     if sinal:
