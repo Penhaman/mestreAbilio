@@ -1,6 +1,6 @@
 import telebot
 import requests
-import pandas
+import pandas as pd
 import ta
 import schedule
 import time
