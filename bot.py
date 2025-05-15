@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 import ta
 import schedule
+import threading
 import time
 import os  # Para acessar variáveis de ambiente
 
@@ -197,13 +198,28 @@ def siga(message):
         bot.reply_to(message, f"Erro ao processar o comando: {str(e)}")
         print(f"Erro ao processar o comando: {str(e)}")
 
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    print("Comando /start recebido!")  # Adiciona o log para garantir que o comando chegou
-    bot.reply_to(message, "Bot está funcionando!")
+def tarefa_agendada():
+    # Aqui entra sua função de análise e envio de sinais
+    print("Executando tarefa agendada...")
+    bot.send_message(GRUPO_CHAT_ID, "📢 Novo sinal disponível!")
 
-# Verifique o fluxo de polling
-print("Bot está rodando...")
+# Agendamento
+schedule.every().day.at("08:00").do(tarefa_agendada)
+
+def verificar_agendamentos():
+    while True:
+        schedule.run_pending()
+        time.sleep(10)
+
+# Inicia o agendamento em uma thread paralela
+threading.Thread(target=verificar_agendamentos).start()
+
+# Handlers de comandos
+@bot.message_handler(commands=["start"])
+def start(message):
+    bot.reply_to(message, "✅ Bot ativo!")
+
+# Polling do bot
 bot.polling(none_stop=True)
 
 # Iniciar o bot
