@@ -5,232 +5,154 @@ import ta
 import schedule
 import threading
 import time
-import os  # Para acessar variáveis de ambiente
+import os
 
-# Acessar as variáveis de ambiente do Railway
-BOT_TOKEN = os.getenv('BOT_TOKEN')  # Token do bot armazenado no Railway
-GRUPO_CHAT_ID = os.getenv('GRUPO_CHAT_ID')  # ID do grupo armazenado no Railway
+BOT_TOKEN = os.getenv('BOT_TOKEN')
+GRUPO_CHAT_ID = os.getenv('GRUPO_CHAT_ID')
 
-# Verifica se as variáveis de ambiente foram configuradas corretamente
 if not BOT_TOKEN or not GRUPO_CHAT_ID:
     print("Erro: As variáveis de ambiente BOT_TOKEN ou GRUPO_CHAT_ID não estão configuradas!")
     exit(1)
 
-# Criar o bot
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Função para obter o Top 200 criptomoedas do CoinGecko
-def obter_top_200_coingecko():
-    print("🔄 Obtendo o top 200 de criptomoedas do CoinGecko...")
-    url = 'https://api.coingecko.com/api/v3/coins/markets'
-    params = {
-        'vs_currency': 'usd',  # Os preços vão ser em USD
-        'order': 'market_cap_desc',  # Ordena por capitalização de mercado (do maior para o menor)
-        'per_page': 200,  # Limita para as 200 moedas mais populares
-        'page': 1,  # Página inicial
-        'sparkline': False,  # Não inclui dados do gráfico (sparkline)
-    }
+# Lista global de sinais ativos
+sinais_ativos = []
 
-    response = requests.get(url, params=params)
-    data = response.json()
-    
-    if 'error' in data:
-        print(f"Erro ao obter dados do CoinGecko: {data['error']}")
+def obter_top_200_coingecko():
+    try:
+        url = 'https://api.coingecko.com/api/v3/coins/markets'
+        params = {'vs_currency': 'usd', 'order': 'market_cap_desc', 'per_page': 200, 'page': 1, 'sparkline': False}
+        response = requests.get(url, params=params)
+        data = response.json()
+        return [f"{coin['symbol'].upper()}USDT" for coin in data]
+    except:
         return []
 
-    pares = []
-    for crypto in data:
-        symbol = crypto['symbol'].upper()  # Simbolos em maiúsculo
-        pares.append(f"{symbol}USDT")  # Adiciona o par com USDT (pode ser ajustado para outros pares)
-    
-    print(f"Obtidos {len(pares)} pares de moedas.")
-    return pares
-
-# Função para garantir que as colunas numéricas sejam convertidas corretamente
 def limpar_dados(df):
-    print("🔄 Limpando dados...")
-    df['close'] = pd.to_numeric(df['close'], errors='coerce')  # 'coerce' transforma valores inválidos em NaN
-    df['open'] = pd.to_numeric(df['open'], errors='coerce')
-    df['high'] = pd.to_numeric(df['high'], errors='coerce')
-    df['low'] = pd.to_numeric(df['low'], errors='coerce')
-    df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
+    for col in ['open', 'high', 'low', 'close', 'volume']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    return df.fillna(0)
 
-    # Substitui os NaN por 0
-    df = df.fillna(0)
-
-    return df
-
-# Função para obter os dados históricos do par
 def get_klines(symbol, interval, limit=100):
-    print(f"🔄 Obtendo dados históricos para {symbol} no intervalo {interval}...")
-    url = f'https://api.binance.com/api/v1/klines'
-    params = {
-        'symbol': symbol,
-        'interval': interval,
-        'limit': limit
-    }
-    response = requests.get(url, params=params)
-    data = response.json()
-    
-    if not data:
-        print(f"Erro ao obter dados históricos para {symbol} no intervalo {interval}.")
-        return pd.DataFrame()  # Retorna um DataFrame vazio em caso de erro
-    
-    # Converte para DataFrame
-    df = pd.DataFrame(data, columns=['time', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
-    df['time'] = pd.to_datetime(df['time'], unit='ms')
-    
-    # Limpa e converte os dados
-    df = limpar_dados(df)
+    try:
+        url = f'https://api.binance.com/api/v1/klines'
+        params = {'symbol': symbol, 'interval': interval, 'limit': limit}
+        data = requests.get(url, params=params).json()
+        df = pd.DataFrame(data, columns=[
+            'time', 'open', 'high', 'low', 'close', 'volume',
+            'close_time', 'quote_asset_volume', 'number_of_trades',
+            'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+        ])
+        df['time'] = pd.to_datetime(df['time'], unit='ms')
+        return limpar_dados(df)
+    except:
+        return pd.DataFrame()
 
-    return df
-
-# Função para análise do sinal
-def analisar_sinal(df, symbol, interval):
-    print(f"🔄 Analisando sinal para {symbol} no intervalo {interval}...")
-    # Indicadores técnicos (EMA, RSI, Volume) usando a biblioteca 'ta'
-    df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
-    df['EMA21'] = ta.trend.ema_indicator(df['close'], window=21)
-    df['RSI'] = ta.momentum.rsi(df['close'], window=14)  # Cálculo correto do RSI
-    df['Volume'] = df['volume']
-    
-    sinal = ''
-    
-    # Verifica cruzamento da EMA9 e EMA21
-    if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1]:
-        sinal += f"Sinal Long detetado para {symbol} em {interval} 📈\n"
-    else:
-        sinal += f"Sinal Short detetado para {symbol} em {interval} 📉\n"
-    
-    # Verifica RSI (Exemplo: comprar se RSI < 30, vender se RSI > 70)
-    if df['RSI'].iloc[-1] < 30:
-        sinal += "RSI indica sobrevenda (Potencial Compra) 🟢\n"
-    elif df['RSI'].iloc[-1] > 70:
-        sinal += "RSI indica sobrecompra (Potencial Venda) 🔴\n"
-    
-    # Verifica volume
-    if df['Volume'].iloc[-1] > df['Volume'].mean():
-        sinal += "Alto volume detetado 📊\n"
-    
-    # Padrões de candlestick
-    if verificar_padrao_candle(df):
-        sinal += verificar_padrao_candle(df)  # Adiciona o padrão identificado à mensagem
-
-    # Se houver sinal, retorne
-    if sinal:
-        return sinal
-    else:
-        return None
-
-# Função para verificar padrões de candlestick
 def verificar_padrao_candle(df):
     sinal = ""
-
-    # Martelo Invertido
-    if df['close'].iloc[-1] < df['open'].iloc[-1] and (df['high'].iloc[-1] - df['close'].iloc[-1]) > 2 * (df['close'].iloc[-1] - df['open'].iloc[-1]):
-        sinal += "Martelo invertido detetado ⚠️\n"
-    
-    # Martelo
-    if df['close'].iloc[-1] > df['open'].iloc[-1] and (df['close'].iloc[-1] - df['low'].iloc[-1]) > 2 * (df['open'].iloc[-1] - df['close'].iloc[-1]):
-        sinal += "Martelo detetado 🛑\n"
-    
-    # Doji
-    if abs(df['close'].iloc[-1] - df['open'].iloc[-1]) <= 0.1 * (df['high'].iloc[-1] - df['low'].iloc[-1]):
-        sinal += "Doji detetado 🔲\n"
-    
-    # Engolfo de Alta
-    if df['close'].iloc[-1] > df['open'].iloc[-1] and df['close'].iloc[-2] < df['open'].iloc[-2] and df['close'].iloc[-1] > df['open'].iloc[-2] and df['open'].iloc[-1] < df['close'].iloc[-2]:
-        sinal += "Engolfo de Alta detetado 🟢\n"
-    
-    # Engolfo de Baixa
-    if df['close'].iloc[-1] < df['open'].iloc[-1] and df['close'].iloc[-2] > df['open'].iloc[-2] and df['close'].iloc[-1] < df['open'].iloc[-2] and df['open'].iloc[-1] > df['close'].iloc[-2]:
-        sinal += "Engolfo de baixa detetado 🔴\n"
-    
-    # Estrela da Manhã
-    if df['close'].iloc[-1] > df['open'].iloc[-1] and df['close'].iloc[-2] < df['open'].iloc[-2] and df['close'].iloc[-3] < df['open'].iloc[-3]:
-        sinal += "Morning Star detetada 🌅\n"
-    
-    # Estrela da Noite
-    if df['close'].iloc[-1] < df['open'].iloc[-1] and df['close'].iloc[-2] > df['open'].iloc[-2] and df['close'].iloc[-3] > df['open'].iloc[-3]:
-        sinal += "Evening Star detetada 🌙\n"
-
+    c, o, h, l = df['close'], df['open'], df['high'], df['low']
+    if c.iloc[-1] < o.iloc[-1] and (h.iloc[-1] - c.iloc[-1]) > 2 * (c.iloc[-1] - o.iloc[-1]):
+        sinal += "Martelo invertido ⚠️\n"
+    if c.iloc[-1] > o.iloc[-1] and (c.iloc[-1] - l.iloc[-1]) > 2 * (o.iloc[-1] - c.iloc[-1]):
+        sinal += "Martelo 🛑\n"
+    if abs(c.iloc[-1] - o.iloc[-1]) <= 0.1 * (h.iloc[-1] - l.iloc[-1]):
+        sinal += "Doji 🔲\n"
+    if c.iloc[-1] > o.iloc[-1] and c.iloc[-2] < o.iloc[-2] and c.iloc[-1] > o.iloc[-2] and o.iloc[-1] < c.iloc[-2]:
+        sinal += "Engolfo de Alta 🟢\n"
+    if c.iloc[-1] < o.iloc[-1] and c.iloc[-2] > o.iloc[-2] and c.iloc[-1] < o.iloc[-2] and o.iloc[-1] > c.iloc[-2]:
+        sinal += "Engolfo de Baixa 🔴\n"
+    if c.iloc[-1] > o.iloc[-1] and c.iloc[-2] < o.iloc[-2] and c.iloc[-3] < o.iloc[-3]:
+        sinal += "Morning Star 🌅\n"
+    if c.iloc[-1] < o.iloc[-1] and c.iloc[-2] > o.iloc[-2] and c.iloc[-3] > o.iloc[-3]:
+        sinal += "Evening Star 🌙\n"
     return sinal
 
-# Função para enviar sinal agendado
+def analisar_sinal(df, symbol, interval):
+    try:
+        df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
+        df['EMA21'] = ta.trend.ema_indicator(df['close'], window=21)
+        df['RSI'] = ta.momentum.rsi(df['close'], window=14)
+
+        sinal = ""
+        if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1]:
+            sinal += "Tendência: Long 📈\n"
+        else:
+            sinal += "Tendência: Short 📉\n"
+
+        rsi = df['RSI'].iloc[-1]
+        if rsi < 30:
+            sinal += f"RSI {rsi:.1f}: Sobrevendido 🟢\n"
+        elif rsi > 70:
+            sinal += f"RSI {rsi:.1f}: Sobrecomprado 🔴\n"
+
+        if df['volume'].iloc[-1] > df['volume'].mean():
+            sinal += "Volume acima da média 📊\n"
+
+        candle = verificar_padrao_candle(df)
+        if candle:
+            sinal += candle
+
+        return sinal if sinal else None
+    except Exception as e:
+        print(f"[ERRO análise {symbol}] {e}")
+        return None
+
 def tarefa_agendada():
-    print("⏰ Execução automática de sinais...")
-    symbols = obter_top_200_coingecko()  # Obtém os 200 pares mais populares
-    if not symbols:
-        print("Nenhum par encontrado para enviar sinais.")
-        return
+    print("🔁 Iniciando tarefa agendada...")
+    sinais_ativos.clear()
+    symbols = obter_top_200_coingecko()
     intervals = ["1d", "1w"]
     for symbol in symbols:
         for interval in intervals:
-            df = get_klines(symbol, interval, 100)
-            if df.empty:
-                continue
+            df = get_klines(symbol, interval)
+            if df.empty: continue
             sinal = analisar_sinal(df, symbol, interval)
             if sinal:
-                bot.send_message(GRUPO_CHAT_ID, f"[AGENDADO]\n{sinal}")
+                mensagem = f"🔔 Sinal detectado para {symbol} ({interval}):\n{sinal}"
+                bot.send_message(GRUPO_CHAT_ID, mensagem)
+                sinais_ativos.append(mensagem)
 
-# Comando /siga
 @bot.message_handler(commands=['siga'])
 def siga(message):
     try:
-        params = message.text.split()[1:]  # Obtém o par e o intervalo do comando
-        if len(params) != 2:
-            bot.reply_to(message, "Por favor, forneça o par e o intervalo. Exemplo: /siga BTCUSDT 1d")
-            return
-        
-        symbol, interval = params
-        df = get_klines(symbol, interval, 100)
+        _, symbol, interval = message.text.strip().split()
+        df = get_klines(symbol, interval)
         if df.empty:
-            bot.reply_to(message, f"Erro: Não foi possível obter dados para {symbol}.")
+            bot.reply_to(message, "Erro ao obter dados.")
             return
-        
         sinal = analisar_sinal(df, symbol, interval)
         if sinal:
             bot.reply_to(message, f"Sinal para {symbol} ({interval}):\n{sinal}")
         else:
             bot.reply_to(message, f"Sem sinal para {symbol} ({interval}).")
-    
     except Exception as e:
-        bot.reply_to(message, f"Erro ao processar o comando: {str(e)}")
-        print(f"Erro ao processar o comando: {str(e)}")
+        bot.reply_to(message, f"Erro: {str(e)}")
 
-def tarefa_agendada():
-    # Aqui entra sua função de análise e envio de sinais
-    print("Executando tarefa agendada...")
-    bot.send_message(GRUPO_CHAT_ID, "📢 Novo sinal disponível!")
+@bot.message_handler(commands=["listar"])
+def listar(message):
+    if sinais_ativos:
+        for sinal in sinais_ativos:
+            bot.reply_to(message, sinal)
+    else:
+        bot.reply_to(message, "Nenhum sinal ativo no momento.")
 
-# Agendamento
-schedule.every().day.at("08:00").do(tarefa_agendada)
+@bot.message_handler(commands=["start"])
+def start(message):
+    bot.reply_to(message, "🤖 Bot de sinais ativo! Use /siga ou /listar.")
 
 def verificar_agendamentos():
     while True:
         schedule.run_pending()
         time.sleep(10)
 
-# Inicia o agendamento em uma thread paralela
+# Agendamentos
+schedule.every().day.at("08:00").do(tarefa_agendada)
+schedule.every(30).minutes.do(tarefa_agendada)
+
 threading.Thread(target=verificar_agendamentos).start()
-
-# Handlers de comandos
-@bot.message_handler(commands=["start"])
-def start(message):
-    bot.reply_to(message, "✅ Bot ativo!")
-
-# Polling do bot
-bot.polling(none_stop=True)
 
 # Iniciar o bot
 if __name__ == '__main__':
-    # Agendar o envio automático de sinais
-    schedule.every(30).minutes.do(tarefa_agendada)
-    
-    # Iniciar o bot e agendar as tarefas
-    while True:
-        try:
-            schedule.run_pending()
-            time.sleep(1)
-        except Exception as e:
-            print(f"Erro na execução: {e}")
+    print("Bot iniciado.")
+    bot.polling(none_stop=True)
