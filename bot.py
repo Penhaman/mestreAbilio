@@ -123,8 +123,7 @@ def start(message):
 @bot.message_handler(commands=['help'])
 def help_command(message):
     ajuda = (
-        "📘 *Comandos disponíveis:*
-\n"
+        "📘 *Comandos disponíveis:*\n"
         "/start - Ativa o bot\n"
         "/help - Mostra esta ajuda\n"
         "/siga [par] [intervalo] - Verifica sinal manual. Ex: /siga BTCUSDT 1d\n"
