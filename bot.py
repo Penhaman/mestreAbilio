@@ -161,6 +161,23 @@ def siga(message):
 @bot.message_handler(commands=["start"])
 def start(message):
     bot.reply_to(message, "✅ Bot ativo e pronto para analisar sinais!")
+@bot.message_handler(commands=['help'])
+def help_command(message):
+    texto_ajuda = (
+        "🤖 *Comandos disponíveis:*\n\n"
+        "/start - Verifica se o bot está ativo\n"
+        "/help - Mostra esta mensagem de ajuda\n"
+        "/siga <PAR> <TIMEFRAME> - Verifica sinais técnicos para um par específico\n"
+        "   Ex: `/siga BTCUSDT 1d`\n"
+        "/sinais - Executa a verificação de sinais para todos os pares no timeframe 1D\n"
+        "\n"
+        "*⏱️ Timeframes suportados:* `1d`, `1w`\n"
+        "*📊 Indicadores usados:* EMA, RSI, Volume\n"
+        "*📉 Padrões Candlestick:* Martelo, Martelo Invertido, Doji, Engolfo, Estrela da Manhã/Noite\n"
+        "\n"
+        "⚠️ Certifique-se de digitar o par em maiúsculas (ex: BTCUSDT).\n"
+    )
+    bot.reply_to(message, texto_ajuda, parse_mode="Markdown")
 
 # Thread para agendamentos
 def verificar_agendamentos():
