@@ -10,7 +10,7 @@ from flask import Flask, request
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 GRUPO_CHAT_ID = os.getenv('GRUPO_CHAT_ID')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Ex: https://worker-production-xxxx.up.railway.app
+WEBHOOK_URL = "https://worker-production-81f4.up.railway.app"
 
 if not BOT_TOKEN or not GRUPO_CHAT_ID or not WEBHOOK_URL:
     raise Exception("Erro: BOT_TOKEN, GRUPO_CHAT_ID ou WEBHOOK_URL não definidos!")
