@@ -109,4 +109,40 @@ def cmd_help(msg):
 @bot.message_handler(commands=["siga"])
 def cmd_siga(msg):
     try:
-        _, par
+        _, par, intervalo = msg.text.split()
+        par = par.upper()
+        intervalo = intervalo.lower()
+
+        df = get_klines(par, intervalo)
+        if df.empty:
+            bot.reply_to(msg, f"⚠️ Não foi possível obter dados para {par} em {intervalo}")
+            return
+
+        analise = analisar_sinal(df, par, intervalo)
+        bot.reply_to(msg, f"📊 {analise}")
+
+    except ValueError:
+        bot.reply_to(msg, "❌ Formato inválido. Use: /siga PAR INTERVALO (ex: /siga BTCUSDT 1d)")
+    except Exception as e:
+        bot.reply_to(msg, f"⚠️ Erro: {e}")
+# ============ Webhook Flask ============
+
+@app.route('/', methods=['GET'])
+def home():
+    return 'Bot ativo!'
+
+@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return 'OK', 200
+
+def configurar_webhook():
+    bot.remove_webhook()
+    time.sleep(1)
+    bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+
+if __name__ == '__main__':
+    configurar_webhook()
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
