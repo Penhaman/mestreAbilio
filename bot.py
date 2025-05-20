@@ -11,7 +11,7 @@ GRUPO_CHAT_ID = os.getenv('GRUPO_CHAT_ID')
 WEBHOOK_URL = "https://worker-production-81f4.up.railway.app"
 
 
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
+bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
 # ============ Funções auxiliares ============
@@ -139,27 +139,22 @@ def sinais_1w_command(message):
     for sinal in sinais:
         bot.reply_to(message, sinal)
 
-# Endpoint Webhook do Telegram
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
-def receber_mensagem():
-    json_str = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_str)
+def webhook():
+    json_data = request.get_data().decode("utf-8")
+    update = telebot.types.Update.de_json(json_data)
     bot.process_new_updates([update])
     return 'OK', 200
 
-# Home para testes
-@app.route('/', methods=['GET'])
-def index():
-    return 'Bot online.', 200
+# Configurar o webhook ao iniciar
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, "Bot ativo!")
 
-# Configura o webhook (executado só uma vez)
 def configurar_webhook():
-    webhook_url_completo = f"{WEBHOOK_URL}/{BOT_TOKEN}"
     bot.remove_webhook()
-    bot.set_webhook(url=webhook_url_completo)
-    print(f"[✅] Webhook configurado: {webhook_url_completo}")
+    bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
 
-# Inicia servidor Flask
-if __name__ == "__main__":
+if __name__ == '__main__':
     configurar_webhook()
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
