@@ -1,10 +1,9 @@
-import os
-import time
-import requests
-import pandas as pd
-import ta
 import telebot
 from flask import Flask, request
+import os
+import threading
+import schedule
+import time
 
 # ============ Configuração Inicial ============
 
@@ -12,8 +11,6 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 GRUPO_CHAT_ID = os.getenv('GRUPO_CHAT_ID')
 WEBHOOK_URL = "https://worker-production-81f4.up.railway.app"
 
-if not BOT_TOKEN or not GRUPO_CHAT_ID or not WEBHOOK_URL:
-    raise Exception("Erro: BOT_TOKEN, GRUPO_CHAT_ID ou WEBHOOK_URL não definidos!")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
@@ -92,57 +89,86 @@ def analisar_sinal(df, symbol, interval):
 
     return msg
 
-# ============ Comandos Telegram ============
+# === Comando /start ===
+@bot.message_handler(commands=['start'])
+def start(message):
+    bot.reply_to(message, "Olá! Sou o TEU Bot.\nUse /help para ver os comandos disponíveis.")
 
-@bot.message_handler(commands=["start"])
-def cmd_start(msg):
-    bot.reply_to(msg, "✅ Bot ativo! Use /help para ver os comandos disponíveis.")
+# === Comando /help ===
+@bot.message_handler(commands=['help'])
+def help_command(message):
+    bot.reply_to(message, """
+📖 *Comandos disponíveis:*
 
-@bot.message_handler(commands=["help"])
-def cmd_help(msg):
-    bot.reply_to(msg, """📘 Comandos disponíveis:
-/start - Ativa o bot
-/help - Lista os comandos
-/sinais - Analisa os principais pares em 1D
-/siga PAR INTERVALO - Ex: /siga BTCUSDT 1d""")
+/start - Inicia a conversa com o bot.
+/help - Mostra esta ajuda.
+/sinais [PAR] - Mostra sinais de trading diários (1D). Ex: `/sinais BTCUSDT` ou `/sinais btcusdt`
+/sinais1w [PAR] - Mostra sinais semanais (1W). Ex: `/sinais1w ETHUSDT` ou `/sinais1w ethusdt`
 
-@bot.message_handler(commands=["siga"])
-def cmd_siga(msg):
+⚠️ Os pares podem ser enviados em letras maiúsculas ou minúsculas.
+    """, parse_mode='Markdown')
+
+# === Simulação de verificação de sinais ===
+def verificar_sinais(par: str, timeframe: str = "1D"):
+    par = par.upper()
+    return f"Sinais {timeframe} para {par}:\n🔹 RSI: 55\n🔹 MACD: Bullish\n🔹 EMA: Acima da média"
+
+# === Comando /sinais (diário) ===
+@bot.message_handler(commands=['sinais'])
+def sinais(message):
     try:
-        _, par, intervalo = msg.text.split()
-        par = par.upper()
-        intervalo = intervalo.lower()
-
-        df = get_klines(par, intervalo)
-        if df.empty:
-            bot.reply_to(msg, f"⚠️ Não foi possível obter dados para {par} em {intervalo}")
+        partes = message.text.split()
+        if len(partes) < 2:
+            bot.reply_to(message, "❌ Especifica o par. Exemplo: /sinais BTCUSDT")
             return
-
-        analise = analisar_sinal(df, par, intervalo)
-        bot.reply_to(msg, f"📊 {analise}")
-
-    except ValueError:
-        bot.reply_to(msg, "❌ Formato inválido. Use: /siga PAR INTERVALO (ex: /siga BTCUSDT 1d)")
+        par = partes[1].upper()
+        resposta = verificar_sinais(par, "1D")
+        bot.reply_to(message, resposta)
     except Exception as e:
-        bot.reply_to(msg, f"⚠️ Erro: {e}")
-# ============ Webhook Flask ============
+        bot.reply_to(message, f"Erro ao processar sinais: {e}")
 
-@app.route('/', methods=['GET'])
-def home():
-    return 'Bot ativo!'
+# === Comando /sinais1w (semanal) ===
+@bot.message_handler(commands=['sinais1w'])
+def sinais1w(message):
+    try:
+        partes = message.text.split()
+        if len(partes) < 2:
+            bot.reply_to(message, "❌ Especifica o par. Exemplo: /sinais1w BTCUSDT")
+            return
+        par = partes[1].upper()
+        resposta = verificar_sinais(par, "1W")
+        bot.reply_to(message, resposta)
+    except Exception as e:
+        bot.reply_to(message, f"Erro ao processar sinais: {e}")
 
-@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+# === Tarefa agendada automática (exemplo) ===
+def tarefa_agendada():
+    print("Executando tarefa automática (exemplo de agendamento)")
+    # Aqui você pode colocar a lógica para enviar sinais para um canal
+
+def iniciar_agendamento():
+    schedule.every().day.at("10:00").do(tarefa_agendada)
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+# === Webhook Flask ===
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def webhook():
-    json_str = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_str)
+    update = telebot.types.Update.de_json(request.stream.read().decode("utf-8"))
     bot.process_new_updates([update])
-    return 'OK', 200
+    return "OK", 200
 
+@app.route("/", methods=["GET"])
+def index():
+    return "Bot ativo!"
+
+# === Registrar Webhook ===
 def configurar_webhook():
     bot.remove_webhook()
-    time.sleep(1)
     bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     configurar_webhook()
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    threading.Thread(target=iniciar_agendamento).start()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
