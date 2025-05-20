@@ -157,5 +157,5 @@ def configurar_webhook():
 
 if __name__ == '__main__':
     configurar_webhook()
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5000))  # <- Aqui está a correção
     app.run(host='0.0.0.0', port=port)
