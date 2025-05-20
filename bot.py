@@ -141,10 +141,10 @@ def sinais_1w_command(message):
 
 @app.route(f'/{BOT_TOKEN}', methods=['POST'])
 def webhook():
-    json_data = request.get_data().decode("utf-8")
-    update = telebot.types.Update.de_json(json_data)
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
     bot.process_new_updates([update])
-    return 'OK', 200
+    return '', 200
 
 # Configurar o webhook ao iniciar
 @bot.message_handler(commands=['start'])
@@ -157,4 +157,5 @@ def configurar_webhook():
 
 if __name__ == '__main__':
     configurar_webhook()
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
