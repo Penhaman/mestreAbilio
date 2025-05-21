@@ -94,31 +94,26 @@ def analisar_sinal(df, symbol, interval):
 def start(message):
     bot.reply_to(message, "🤖 Olá! Sou o TEU BOT de sinais. Use /help para ver os comandos disponíveis.")
 @bot.message_handler(commands=['siga'])
-def siga(message):
+def siga_command(message):
     try:
         args = message.text.split()
         if len(args) < 2:
-            bot.reply_to(message, "Uso correto: /siga <par> [timeframe]\nEx: /siga BTCUSDT 1d")
+            bot.reply_to(message, "⚠️ Uso correto: /siga BTCUSDT [intervalo]. Ex: /siga BTCUSDT 1d")
             return
 
-        symbol = normalizar_par(args[1])
-        interval = args[2].lower() if len(args) > 2 else '1d'
+        par = args[1].upper()
+        intervalo = args[2] if len(args) > 2 else "1d"
 
-        valid_intervals = ['1d', '4h', '1w']
-        if interval not in valid_intervals:
-            bot.reply_to(message, f"⛔ Intervalo inválido. Use: {', '.join(valid_intervals)}")
-            return
-
-        df = get_klines(symbol, interval)
+        df = get_klines(par, intervalo)
         if df.empty:
-            bot.reply_to(message, f"❌ Não foi possível obter dados para {symbol} com intervalo {interval}")
+            bot.reply_to(message, f"❌ Não foi possível obter dados para {par} no intervalo {intervalo}.")
             return
 
-        resultado = analisar_sinal(df, symbol, interval)
-        bot.reply_to(message, resultado)
+        sinal = analisar_sinal(df, par, intervalo)
+        bot.reply_to(message, f"📊 Análise para {par} ({intervalo}):\n\n{sinal}")
 
     except Exception as e:
-        bot.reply_to(message, f"Erro no comando /siga: {str(e)}")
+        bot.reply_to(message, f"Erro no comando /siga: {e}")
 
 @bot.message_handler(commands=['teste'])
 def testar_id(message):
