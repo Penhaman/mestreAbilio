@@ -119,6 +119,13 @@ def siga(message):
 
     except Exception as e:
         bot.reply_to(message, f"Erro no comando /siga: {str(e)}")
+
+@bot.message_handler(commands=['teste'])
+def testar_id(message):
+    chat_id = message.chat.id
+    bot.reply_to(message, f"🆔 ID deste chat: <code>{chat_id}</code>", parse_mode='HTML')
+
+
 # Comando /help
 @bot.message_handler(commands=['help'])
 def help_command(message):
