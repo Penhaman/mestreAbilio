@@ -92,7 +92,28 @@ def analisar_sinal(df, symbol, interval):
 @bot.message_handler(commands=['start'])
 def start(message):
     bot.reply_to(message, "🤖 Olá! Sou o TEU BOT de sinais. Use /help para ver os comandos disponíveis.")
+@bot.message_handler(commands=['siga'])
+def siga(message):
+    try:
+        args = message.text.split()
+        if len(args) < 2:
+            bot.reply_to(message, "❌ Por favor forneça o par. Exemplo: /siga BTCUSDT")
+            return
 
+        par = normalizar_par(args[1])
+        intervalo = '1d'  # ou usar args[2] se quiser permitir passar o período
+
+        df = get_klines(par, interval=intervalo, limit=100)
+        if df.empty:
+            bot.reply_to(message, f"⚠️ Não foi possível obter dados para {par}.")
+            return
+
+        resultado = analisar_sinal(df, par, intervalo)
+        bot.reply_to(message, f"📊 Resultado para {par}:\n{resultado}", parse_mode='HTML')
+
+    except Exception as e:
+        print(f"Erro no comando /siga: {e}")
+        bot.reply_to(message, "❌ Ocorreu um erro ao processar o sinal.")
 # Comando /help
 @bot.message_handler(commands=['help'])
 def help_command(message):
