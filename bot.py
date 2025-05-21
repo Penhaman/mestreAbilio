@@ -98,23 +98,27 @@ def siga(message):
     try:
         args = message.text.split()
         if len(args) < 2:
-            bot.reply_to(message, "❌ Por favor forneça o par. Exemplo: /siga BTCUSDT")
+            bot.reply_to(message, "Uso correto: /siga <par> [timeframe]\nEx: /siga BTCUSDT 1d")
             return
 
-        par = normalizar_par(args[1])
-        intervalo = '1d'  # ou usar args[2] se quiser permitir passar o período
+        symbol = normalizar_par(args[1])
+        interval = args[2].lower() if len(args) > 2 else '1d'
 
-        df = get_klines(par, interval=intervalo, limit=100)
+        valid_intervals = ['1d', '4h', '1w']
+        if interval not in valid_intervals:
+            bot.reply_to(message, f"⛔ Intervalo inválido. Use: {', '.join(valid_intervals)}")
+            return
+
+        df = get_klines(symbol, interval)
         if df.empty:
-            bot.reply_to(message, f"⚠️ Não foi possível obter dados para {par}.")
+            bot.reply_to(message, f"❌ Não foi possível obter dados para {symbol} com intervalo {interval}")
             return
 
-        resultado = analisar_sinal(df, par, intervalo)
-        bot.reply_to(message, f"📊 Resultado para {par}:\n{resultado}", parse_mode='HTML')
+        resultado = analisar_sinal(df, symbol, interval)
+        bot.reply_to(message, resultado)
 
     except Exception as e:
-        print(f"Erro no comando /siga: {e}")
-        bot.reply_to(message, "❌ Ocorreu um erro ao processar o sinal.")
+        bot.reply_to(message, f"Erro no comando /siga: {str(e)}")
 # Comando /help
 @bot.message_handler(commands=['help'])
 def help_command(message):
