@@ -68,7 +68,7 @@ def verificar_padrao_candle(df):
     return s
 
 def analisar_sinal(df, symbol, interval):
-    
+    msg = f"📊 Análise de sinal para {symbol} em {interval}\n\n"
     try:
         # Calcular EMAs
         df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
