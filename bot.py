@@ -127,6 +127,7 @@ def help_command(message):
 
 /start - Iniciar o bot
 /help - Ver esta mensagem de ajuda
+/siga - usar o /siga mais o par e timeframe
 /sinais - Verificar sinais imediatos (pares 1D)
 /sinais1d - Verificar sinais para o período de 1D
 /sinais1w - Verificar sinais para o período de 1W
@@ -138,11 +139,21 @@ def normalizar_par(par):
     return par.upper()
 
 # Simulação de verificação de sinal (substitua pela lógica real)
-def verificar_sinais(periodo="1D"):
-    exemplo = [
-        f"✅ Sinal Detectado\n<b>Par:</b> BTC/USDT\n<b>Período:</b> {periodo}\n<b>Data:</b> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
-    ]
-    return exemplo
+def verificar_sinais(periodo="1d"):
+    sinais_detectados = []
+    top_pares = obter_top_200_coingecko()
+
+    for symbol in top_pares[:10]:  # Limite para 10 pares por desempenho
+        df = get_klines(symbol, periodo)
+        if df.empty or len(df) < 50:
+            continue
+        analise = analisar_sinal(df, symbol, periodo)
+        if "detetado" in analise:
+            sinais_detectados.append(f"🔍 <b>Par:</b> {symbol}\n<b>Período:</b> {periodo.upper()}\n{analise}")
+
+    if not sinais_detectados:
+        return ["Nenhum sinal relevante encontrado."]
+    return sinais_detectados
 
 # Comando /sinais (1D apenas)
 @bot.message_handler(commands=['sinais'])
@@ -154,9 +165,9 @@ def sinais_1d(message):
 # Comando /sinais1d
 @bot.message_handler(commands=['sinais1d'])
 def sinais_1d_command(message):
-    sinais = verificar_sinais("1D")
+    sinais = verificar_sinais("1d")
     for sinal in sinais:
-        bot.reply_to(message, sinal)
+        bot.reply_to(message, sinal, parse_mode='HTML')
 
 # Comando /sinais1w
 @bot.message_handler(commands=['sinais1w'])
