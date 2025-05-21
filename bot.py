@@ -5,6 +5,8 @@ import telebot
 import ta
 from flask import Flask, request
 from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+
 # ============ Configuração Inicial ============
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -108,7 +110,28 @@ def analisar_sinal(df, symbol, interval):
         msg += "\n🔍 Padrões identificados:\n" + padrao
 
     return msg
+def analisar_sinal_diario(df, symbol):
+    try:
+        df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
+        df['EMA21'] = ta.trend.ema_indicator(df['close'], window=21)
+        df['RSI'] = ta.momentum.rsi(df['close'], window=14)
+        rsi = df['RSI'].iloc[-1]
 
+        # Condições específicas para sinal diário
+        if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1] and rsi < 30:
+            padrao = verificar_padrao_candle(df)
+            if any(term in padrao.lower() for term in ["martelo", "engolfo", "estrela", "doji"]):
+                return f"""
+✅ <b>Sinal Long Detectado</b>
+<b>Par:</b> {symbol}
+<b>Período:</b> 1D
+<b>RSI:</b> {rsi:.2f}
+<b>Padrão:</b> {padrao}
+📅 <b>Data:</b> {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+"""
+    except Exception as e:
+        print(f"Erro ao analisar {symbol}: {e}")
+    return None
 # Comando /start
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -214,6 +237,32 @@ def start(message):
 def configurar_webhook():
     bot.remove_webhook()
     bot.set_webhook(url=f"{WEBHOOK_URL}/{BOT_TOKEN}")
+
+
+
+def tarefa_diaria():
+    print("🔍 Executando análise diária às 9h...")
+    top200 = obter_top_200_coingecko()
+    sinais = []
+
+    for symbol in top200:
+        df = get_klines(symbol, '1d', 100)
+        if df.empty:
+            continue
+        sinal = analisar_sinal_diario(df, symbol)
+        if sinal:
+            sinais.append(sinal)
+
+    if sinais:
+        for sinal in sinais:
+            bot.send_message(GRUPO_CHAT_ID, sinal, parse_mode="HTML")
+    else:
+        bot.send_message(GRUPO_CHAT_ID, "📭 Nenhum sinal long com RSI < 30 e padrão bullish foi encontrado hoje.")
+
+# Iniciar agendamento
+scheduler = BackgroundScheduler()
+scheduler.add_job(tarefa_diaria, 'cron', hour=9, minute=0)  # 9:00 UTC
+scheduler.start()
 
 if __name__ == '__main__':
     configurar_webhook()
