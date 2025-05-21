@@ -68,24 +68,45 @@ def verificar_padrao_candle(df):
     return s
 
 def analisar_sinal(df, symbol, interval):
-    df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
-    df['EMA21'] = ta.trend.ema_indicator(df['close'], window=21)
-    df['RSI'] = ta.momentum.rsi(df['close'], window=14)
+    msg = f"📊 Análise de sinal para <b>{symbol}</b> em <b>{interval}</b>\n\n"
+    
+    try:
+        # Calcular EMAs
+        df['EMA9'] = ta.trend.ema_indicator(df['close'], window=9)
+        df['EMA21'] = ta.trend.ema_indicator(df['close'], window=21)
 
-    msg = f"Sinal {'Long 📈' if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1] else 'Short 📉'} para {symbol} em {interval}\n"
+        if df['EMA9'].iloc[-1] > df['EMA21'].iloc[-1]:
+            msg += "Tendência: Long 📈 (EMA9 acima da EMA21)\n"
+        else:
+            msg += "Tendência: Short 📉 (EMA9 abaixo da EMA21)\n"
 
-    rsi = df['RSI'].iloc[-1]
-    if rsi < 30:
-        msg += "RSI indica sobrevenda 🟢\n"
-    elif rsi > 70:
-        msg += "RSI indica sobrecompra 🔴\n"
+    except Exception as e:
+        msg += f"Erro ao calcular EMAs: {e}\n"
 
-    if df['volume'].iloc[-1] > df['volume'].mean():
-        msg += "Alto volume detetado 📊\n"
+    try:
+        # Calcular RSI
+        df['RSI'] = ta.momentum.rsi(df['close'], window=14)
+        rsi = df['RSI'].iloc[-1]
+        msg += f"RSI atual: {rsi:.2f}\n"
 
+        if rsi < 30:
+            msg += "RSI indica sobrevenda 🟢\n"
+        elif rsi > 70:
+            msg += "RSI indica sobrecompra 🔴\n"
+    except Exception as e:
+        msg += f"Erro ao calcular RSI: {e}\n"
+
+    # Verificar volume
+    try:
+        if df['volume'].iloc[-1] > df['volume'].mean():
+            msg += "Volume alto detectado 📊\n"
+    except:
+        pass
+
+    # Detectar padrões de candle
     padrao = verificar_padrao_candle(df)
     if padrao:
-        msg += padrao
+        msg += "\n🔍 Padrões identificados:\n" + padrao
 
     return msg
 
