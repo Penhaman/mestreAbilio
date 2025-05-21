@@ -68,7 +68,6 @@ def verificar_padrao_candle(df):
     return s
 
 def analisar_sinal(df, symbol, interval):
-    msg = f"📊 Análise de sinal para <b>{symbol}</b> em <b>{interval}</b>\n\n"
     
     try:
         # Calcular EMAs
