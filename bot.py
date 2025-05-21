@@ -162,7 +162,13 @@ def siga_command(message):
 def testar_id(message):
     chat_id = message.chat.id
     bot.reply_to(message, f"🆔 ID deste chat: <code>{chat_id}</code>", parse_mode='HTML')
-
+@bot.message_handler(commands=['analise_diaria'])
+def analise_diaria_command(message):
+    if str(message.chat.id) == str(GRUPO_CHAT_ID):  # Garante que só funciona no grupo
+        bot.reply_to(message, "⏳ A iniciar análise manual dos tokens...")
+        tarefa_diaria()
+    else:
+        bot.reply_to(message, "⚠️ Este comando só pode ser usado no grupo autorizado.")
 
 # Comando /help
 @bot.message_handler(commands=['help'])
