@@ -1,10 +1,10 @@
 import os
-import telebot
 import requests
+import pandas as pd
+import telebot
+import ta
 from flask import Flask, request
 from datetime import datetime
-import threading
-
 # ============ Configuração Inicial ============
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
